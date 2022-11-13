@@ -1,30 +1,41 @@
+//Глобальные переменные 
+#define GRAPH_UPDATE_TIME 10000
+#define MQ135_PIN A1
+#define DHT11_PIN 9
+#define RTC_RST 8
+#define RTC_DAT 7
+#define RTC_CLK 6
+#define SD_CS 4
+#define SENSOR_PIN 3
+#define WRITE_SD 60 //В секундах
+#define CO2_NORMAL_LIMIT 10000
+
+//НЕ РАБОТАЕТ СД ЗАПИСЬ НОРМАЛЬНО И CO2 В ГРАФИКАХ
+
+//mq-135
+  #include <TroykaMQ.h>
+  MQ135 mq135(MQ135_PIN);
 //lcd
-#include <Wire.h>
-#include <LiquidCrystal_I2C.h>
-
+  #include <Wire.h>
+  #include <LiquidCrystal_I2C.h>
 //BMP280
-#include <GyverBME280.h>
-GyverBME280 bmp;
-
+  #include <GyverBME280.h>
+  GyverBME280 bmp;
 //DHT11
-#include "DHT.h"
-DHT dht(9, DHT11);
-
+  #include "DHT.h"
+  DHT dht(DHT11_PIN, DHT11);
 //RTC1302
-#include <ThreeWire.h>
-#include <RtcDS1302.h>
-ThreeWire myWire(7, 6, 8);
-RtcDS1302<ThreeWire> Rtc(myWire);
-
+  #include <ThreeWire.h>
+  #include <RtcDS1302.h>
+  ThreeWire myWire(RTC_DAT, RTC_CLK, RTC_RST);
+  RtcDS1302<ThreeWire> Rtc(myWire);
 //SD
-#include <SD.h>
-byte counter = 0;
-
+  #include <SD.h>
+  byte counter = 0;
 //lcd init
-LiquidCrystal_I2C lcd(0x27, 20, 4);
+  LiquidCrystal_I2C lcd(0x27, 20, 4);
 
 //Прототипы
-//Считавание с датчиков
 void getTemperature(float* temperature);
 void getHumidity(byte* humidity);
 void getCo2(int* co2);
@@ -38,16 +49,17 @@ void threeScreen();
 void initPlot();
 void printHeader();
 
+void writeRow(String* time, float* temperature, float* pressure, int* humidity, int* co2);
+void writeHeader();
+void drawPlotUp(byte pos, byte row, byte width, byte height, int min_val, int max_val, int fill_val);
+
 void setup() {
   Serial.begin(9600);
   lcd.init();
   lcd.backlight();
   lcd.clear();
 
-  //graph init
-  initPlot();
-
-  pinMode(3, INPUT);
+  pinMode(SENSOR_PIN, INPUT);
   Serial.println("Button S");
 
   if (!bmp.begin()) {
@@ -64,24 +76,31 @@ void setup() {
   Serial.println("DHT11 S");
 
   Serial.print("SD Init");
-  if (!SD.begin(4)) {
+  if (!SD.begin(SD_CS)) {
     Serial.println("SD F");
     return;
   }
   Serial.println("SD S");
 
+  mq135.calibrate(60);
+  Serial.print("Mq calibrate: ");
+  Serial.println(mq135.getRo());
+  Serial.println("Mq-135 S");
+
   writeHeader();
 }
 
+uint32_t myTimer1;
+static byte state = 0;
 void loop() {
-  static byte state = 0;
-
   if (digitalRead(3) == HIGH) {
     state++;
     lcd.clear();
+    checkStateFirst();
     delay(500);
   }
   if (state >= 3) {
+    lcd.clear();
     state = 0;
   }
 
@@ -90,39 +109,103 @@ void loop() {
       oneScreen();
       break;
     case 1:
-      twoScreen();
+      if (millis() - myTimer1 >= GRAPH_UPDATE_TIME) {
+        myTimer1 = millis();
+        twoScreen();
+      }
       break;
     default:
-      threeScreen();
+      if (millis() - myTimer1 >= GRAPH_UPDATE_TIME) {
+        myTimer1 = millis();
+        threeScreen();
+      }
   }
 
   delay(1000);
 }
 
+void checkStateFirst() {
+  switch (state) {
+    case 0:
+      oneScreen();
+      break;
+    case 1:
+        twoScreen();
+      break;
+    default:
+      threeScreen();
+  }
+}
 
 //ЭКРАН 1
 void oneScreen() {
   printHeader();
+  
+  byte celsia[] = {
+    0x1C,
+    0x14,
+    0x1C,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+    0x00
+  };
+  byte danger[] = {
+    0x00,
+    0x1B,
+    0x0E,
+    0x04,
+    0x0E,
+    0x1B,
+    0x00,
+    0x00
+  };  
+  byte accept[] = {
+    B00000,
+    B00001,
+    B00011,
+    B10110,
+    B11100,
+    B01000,
+    B00000,
+    B00000
+  };
+  lcd.createChar(0, celsia);
+  lcd.createChar(2, danger);
+  lcd.createChar(1, accept);
 
   float temperature = 0;
   getTemperature(&temperature);
   lcd.setCursor(5, 0);
   lcd.print(String(temperature));
+  lcd.print('c');
+  lcd.write(0);
 
   int humidity = 0;
   getHumidity(&humidity);
   lcd.setCursor(5, 1);
   lcd.print(String(humidity));
+  lcd.print('%');
 
   int co2 = 0;
   getCo2(&co2);
   lcd.setCursor(5, 2);
   lcd.print(String(co2));
-
+  lcd.print("ppm");
+  lcd.setCursor(13, 2);
+  
+  if(co2 > 1000) {
+    lcd.write(2);
+  } else {
+    lcd.write(1);
+  }
+  
   float pressure = 0;
   getPressure(&pressure);
   lcd.setCursor(5, 3);
   lcd.print(String(pressure));
+  lcd.print("mm");
 
   String time = "";
   getTime(&time);
@@ -130,14 +213,18 @@ void oneScreen() {
   lcd.print(time);
 
   counter++;
-  if (counter >= 60) {  //Проверка прошла ли минута
+  if (counter >= WRITE_SD) {
     counter = 0;
-    writeRow(&time, &temperature, &pressure, &humidity);
+    String timestamps = "";
+    getTimestamps(&timestamps);
+    writeRow(&timestamps, &temperature, &pressure, &humidity, &co2);
   }
 }
 
 //ЭКРАН 2
 void twoScreen() {
+  initPlot();
+
   lcd.setCursor(17, 0);
   lcd.print("Tmp");
   lcd.setCursor(17, 2);
@@ -154,13 +241,12 @@ void twoScreen() {
   drawPlotDown(0, 3, 17, 2, 0, 100, humidity);
   lcd.setCursor(18, 3);
   lcd.print(byte(humidity));
-
-  //Сделать работу на таймере
-  delay(1000);
 }
 
 //ЭКРАН 3
 void threeScreen() {
+  initPlot();
+
   lcd.setCursor(17, 0);
   lcd.print("Co2");
   lcd.setCursor(17, 2);
@@ -168,8 +254,8 @@ void threeScreen() {
 
   int co2 = 0;
   getCo2(&co2);
-  drawPlotUp(0, 1, 17, 2, 200, 300, co2);
-  lcd.setCursor(18, 1);
+  drawPlotUp(0, 1, 17, 2, 300, 1000, co2);
+  lcd.setCursor(17, 1);
   lcd.print(co2);
 
   float pressure = 0;
@@ -177,10 +263,7 @@ void threeScreen() {
   drawPlotDown(0, 3, 17, 2, 730, 780, pressure);
   lcd.setCursor(17, 3);
   lcd.print(int(pressure));
-
-  delay(1000);
 }
-
 
 void getTemperature(float* temperature) {
   *temperature = bmp.readTemperature();
@@ -191,7 +274,7 @@ void getHumidity(int* humidity) {
 }
 
 void getCo2(int* co2) {
-  *co2 = random(200, 300);
+    *co2 = (int) mq135.readCO2();
 }
 
 void getPressure(float* pressure) {
@@ -211,14 +294,32 @@ void getTime(String* time) {
   *time += now.Minute();
 }
 
+void getTimestamps(String* time) {
+  RtcDateTime now = Rtc.GetDateTime();
+  *time += now.Day();
+  *time += F("/");
+  *time += now.Month();
+  *time += F("/");
+  *time += now.Year();
+  *time += F(" ");
+  if (now.Hour() < 10) {
+    *time += F("0");
+  }
+  *time += now.Hour();
+  *time += F(":");
+  if (now.Minute() < 10) {
+    *time += F("0");
+  }
+  *time += now.Minute();  
+}
 
 void writeHeader() {
   Serial.println(F("SD Write start"));
-  File dataFile = SD.open("LOG.txt", FILE_WRITE);
+  File dataFile = SD.open("LOG.csv", FILE_WRITE);
   if (dataFile) {
     String dataString;
     dataString += F("\nWRITE: ");
-    dataString += F("\ntime,temperature,pressure,humidity");
+    dataString += F("\ntime,temperature,pressure,humidity,co2");
     dataFile.println(dataString);
     dataFile.close();
     Serial.println(dataString);
@@ -227,8 +328,8 @@ void writeHeader() {
   }
 }
 
-void writeRow(String* time, float* temperature, float* pressure, int* humidity) {
-  File dataFile = SD.open("LOG.txt", FILE_WRITE);
+void writeRow(String* time, float* temperature, float* pressure, int* humidity, int* co2) {
+  File dataFile = SD.open("LOG.csv", FILE_WRITE);
 
   String tempStr = String(*temperature);
   tempStr.replace(".", ",");
@@ -238,7 +339,9 @@ void writeRow(String* time, float* temperature, float* pressure, int* humidity) 
 
   if (dataFile) {
     String dataString;
+    dataString += F("\"");
     dataString += *time;
+    dataString += F("\"");
     dataString += F(",");
     dataString += F("\"");
     dataString += tempStr;
@@ -249,13 +352,14 @@ void writeRow(String* time, float* temperature, float* pressure, int* humidity) 
     dataString += F("\"");
     dataString += F(",");
     dataString += *humidity;
+    dataString += F(",");
+    dataString += *co2;
 
     dataFile.println(dataString);
     dataFile.close();
     Serial.println(dataString);
   }
 }
-
 
 void printHeader() {
   lcd.home();
@@ -270,7 +374,6 @@ void printHeader() {
   lcd.setCursor(0, 3);
   lcd.print(F("PRES"));
 }
-
 
 void initPlot() {
   byte row8[8] = { 0b11111, 0b11111, 0b11111, 0b11111, 0b11111, 0b11111, 0b11111, 0b11111 };
@@ -300,22 +403,22 @@ void drawPlotUp(byte pos, byte row, byte width, byte height, int min_val, int ma
   fill_val = constrain(fill_val, min_val, max_val);
   plot_arrayUp[width] = fill_val;
 
-  for (byte i = 0; i < width; i++) {  // каждый столбец параметров
+  for (byte i = 0; i < width; i++) {  
     byte infill, fract;
     infill = floor((float)(plot_arrayUp[i] - min_val) / (max_val - min_val) * height * 10);
-    fract = (infill % 10) * 8 / 10;  // найти количество оставшихся полосок
+    fract = (infill % 10) * 8 / 10; 
     infill = infill / 10;
 
-    for (byte n = 0; n < height; n++) {  // для всех строк графика
-      if (n < infill && infill > 0) {    // пока мы ниже уровня
-        lcd.setCursor(i, (row - n));     // заполняем полными ячейками
+    for (byte n = 0; n < height; n++) {  
+      if (n < infill && infill > 0) {    
+        lcd.setCursor(i, (row - n));     
         lcd.write(0);
       }
-      if (n >= infill) {  // если достигли уровня
+      if (n >= infill) {  
         lcd.setCursor(i, (row - n));
-        if (fract > 0) lcd.write(fract);         // заполняем дробные ячейки
-        else lcd.write(0x20);                    // если дробные == 0, заливаем пустой
-        for (byte k = n + 1; k < height; k++) {  // всё что сверху заливаем пустыми
+        if (fract > 0) lcd.write(fract);         
+        else lcd.write(0x20);                    
+        for (byte k = n + 1; k < height; k++) {  
           lcd.setCursor(i, (row - k));
           lcd.write(0x20);
         }
@@ -334,22 +437,22 @@ void drawPlotDown(byte pos, byte row, byte width, byte height, int min_val, int 
   fill_val = constrain(fill_val, min_val, max_val);
   plot_arrayDown[width] = fill_val;
 
-  for (byte i = 0; i < width; i++) {  // каждый столбец параметров
+  for (byte i = 0; i < width; i++) { 
     byte infill, fract;
     infill = floor((float)(plot_arrayDown[i] - min_val) / (max_val - min_val) * height * 10);
-    fract = (infill % 10) * 8 / 10;  // найти количество оставшихся полосок
+    fract = (infill % 10) * 8 / 10;
     infill = infill / 10;
 
-    for (byte n = 0; n < height; n++) {  // для всех строк графика
-      if (n < infill && infill > 0) {    // пока мы ниже уровня
-        lcd.setCursor(i, (row - n));     // заполняем полными ячейками
+    for (byte n = 0; n < height; n++) {  
+      if (n < infill && infill > 0) {    
+        lcd.setCursor(i, (row - n));     
         lcd.write(0);
       }
-      if (n >= infill) {  // если достигли уровня
+      if (n >= infill) {  
         lcd.setCursor(i, (row - n));
-        if (fract > 0) lcd.write(fract);         // заполняем дробные ячейки
-        else lcd.write(0x20);                    // если дробные == 0, заливаем пустой
-        for (byte k = n + 1; k < height; k++) {  // всё что сверху заливаем пустыми
+        if (fract > 0) lcd.write(fract);        
+        else lcd.write(0x20);                   
+        for (byte k = n + 1; k < height; k++) { 
           lcd.setCursor(i, (row - k));
           lcd.write(0x20);
         }
