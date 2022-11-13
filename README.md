@@ -1,7 +1,7 @@
-# school-meteostation
+# school-meteostation 2.0
 
 # Схема метеостанции
-![1](https://sun9-50.userapi.com/impg/LuFuzgQHao3Z2GvlCI7Cm3bj9ZUSAldQOq2PWg/NPf__7ZMIak.jpg?size=1170x1080&quality=95&sign=d3fa497031d5858fa94208c4902df8ce&type=album)
+![1](https://sun9-27.userapi.com/impg/v0J1T3LP2Rc-E3q1Bjb6y1xiEfwxs1Fhq3Td5g/rRwR5QkErLM.jpg?size=1280x787&quality=96&sign=699090439b6d4988d2d22f31fd9a2b62&type=album)
 
 # Библиотеки
 # Скачать из Releases и распаковать по описанию
@@ -17,3 +17,5 @@
 ## [LiquidCrystal I2C](https://github.com/johnrickman/LiquidCrystal_I2C)
 
 ## [Adafruit Sensor](https://github.com/adafruit/Adafruit_Sensor)
+
+## [TroykaMQ](https://github.com/amperka/TroykaMQ)
