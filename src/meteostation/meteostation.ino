@@ -1,5 +1,5 @@
 //Глобальные переменные 
-#define GRAPH_UPDATE_TIME 10000
+#define GRAPH_UPDATE_TIME 10000 //В миллисекундах
 #define MQ135_PIN A1
 #define DHT11_PIN 9
 #define RTC_RST 8
@@ -8,9 +8,7 @@
 #define SD_CS 4
 #define SENSOR_PIN 3
 #define WRITE_SD 60 //В секундах
-#define CO2_NORMAL_LIMIT 10000
-
-//НЕ РАБОТАЕТ СД ЗАПИСЬ НОРМАЛЬНО И CO2 В ГРАФИКАХ
+#define CO2_NORMAL_LIMIT 1000 //В ppm
 
 //mq-135
   #include <TroykaMQ.h>
@@ -195,7 +193,7 @@ void oneScreen() {
   lcd.print("ppm");
   lcd.setCursor(13, 2);
   
-  if(co2 > 1000) {
+  if(co2 > CO2_NORMAL_LIMIT) {
     lcd.write(2);
   } else {
     lcd.write(1);
