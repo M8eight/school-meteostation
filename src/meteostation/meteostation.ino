@@ -1,5 +1,5 @@
 //Глобальные переменные 
-#define GRAPH_UPDATE_TIME 10000 //В миллисекундах
+#define GRAPH_UPDATE_TIME 60000 //В миллисекундах
 #define MQ135_PIN A1
 #define DHT11_PIN 9
 #define RTC_RST 8
@@ -9,6 +9,7 @@
 #define SENSOR_PIN 3
 #define WRITE_SD 60 //В секундах
 #define CO2_NORMAL_LIMIT 1000 //В ppm
+#define MQ_SENSETIVITY 35
 
 //mq-135
   #include <TroykaMQ.h>
@@ -75,12 +76,12 @@ void setup() {
   }
   Serial.println("DHT11 S");
 
-  mq135.calibrate(60);
+  mq135.calibrate(MQ_SENSETIVITY);
   Serial.print("Mq calibrate: ");
   Serial.println(mq135.getRo());
   Serial.println("Mq-135 S");
 
-  Serial.print("SD Init");
+  Serial.println("SD Init");
   if (!SD.begin(SD_CS)) {
     Serial.println("SD F");
     sdState = false;
@@ -253,15 +254,15 @@ void twoScreen() {
 void threeScreen() {
   initPlot();
 
-  lcd.setCursor(17, 0);
+  lcd.setCursor(16, 0);
   lcd.print("Co2");
   lcd.setCursor(17, 2);
   lcd.print("Pre");
 
   int co2 = 0;
   getCo2(&co2);
-  drawPlotUp(0, 1, 17, 2, 300, 1000, co2);
-  lcd.setCursor(17, 1);
+  drawPlotUp(0, 1, 16, 2, 300, 1000, co2);
+  lcd.setCursor(16, 1);
   lcd.print(co2);
 
   float pressure = 0;
