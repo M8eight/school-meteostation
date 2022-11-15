@@ -8,12 +8,13 @@
 #define SD_CS 4
 #define SENSOR_PIN 3
 #define WRITE_SD 60 //В секундах
-#define CO2_NORMAL_LIMIT 1000 //В ppm
+#define CO2_NORMAL_LIMIT 1550 //В ppm
 #define MQ_SENSETIVITY 35
 
 //mq-135
-  #include <TroykaMQ.h>
-  MQ135 mq135(MQ135_PIN);
+  #include <MQ135.h>
+  // MQ135 mq135(MQ135_PIN);
+  MQ135 gasSensor = MQ135(A1);
 //lcd
   #include <Wire.h>
   #include <LiquidCrystal_I2C.h>
@@ -39,7 +40,7 @@ bool sdState = true;
 //Прототипы
 void getTemperature(float* temperature);
 void getHumidity(byte* humidity);
-void getCo2(int* co2);
+void getCo2(int* co2, float temp, int humid);
 void getPressure(int* pressure);
 void getTime(String* time);
 
@@ -76,9 +77,7 @@ void setup() {
   }
   Serial.println("DHT11 S");
 
-  mq135.calibrate(MQ_SENSETIVITY);
   Serial.print("Mq calibrate: ");
-  Serial.println(mq135.getRo());
   Serial.println("Mq-135 S");
 
   Serial.println("SD Init");
@@ -191,13 +190,13 @@ void oneScreen() {
   lcd.print('%');
 
   int co2 = 0;
-  getCo2(&co2);
+  getCo2(&co2, temperature, humidity);
   lcd.setCursor(5, 2);
   lcd.print(String(co2));
   lcd.print("ppm");
   lcd.setCursor(13, 2);
   
-  if(co2 > CO2_NORMAL_LIMIT) {
+  if(co2 > CO2_NORMAL_LIMIT || co2 <= 0) {
     lcd.write(2);
   } else {
     lcd.write(1);
@@ -259,8 +258,13 @@ void threeScreen() {
   lcd.setCursor(17, 2);
   lcd.print("Pre");
 
+  float temperature = 0.0;
+  getTemperature(&temperature);
+  int humidity = 0.0;
+  getHumidity(&humidity);
+
   int co2 = 0;
-  getCo2(&co2);
+  getCo2(&co2, temperature, humidity);
   drawPlotUp(0, 1, 16, 2, 300, 1000, co2);
   lcd.setCursor(16, 1);
   lcd.print(co2);
@@ -280,8 +284,8 @@ void getHumidity(int* humidity) {
   *humidity = int(dht.readHumidity());
 }
 
-void getCo2(int* co2) {
-    *co2 = (int) mq135.readCO2();
+void getCo2(int* co2, float temp, int humid) {
+    *co2 = int(gasSensor.getCorrectedRZero(temp, humid));
 }
 
 void getPressure(float* pressure) {
