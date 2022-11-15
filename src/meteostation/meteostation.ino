@@ -33,6 +33,8 @@
 //lcd init
   LiquidCrystal_I2C lcd(0x27, 20, 4);
 
+bool sdState = true;
+
 //Прототипы
 void getTemperature(float* temperature);
 void getHumidity(byte* humidity);
@@ -73,19 +75,20 @@ void setup() {
   }
   Serial.println("DHT11 S");
 
-  Serial.print("SD Init");
-  if (!SD.begin(SD_CS)) {
-    Serial.println("SD F");
-    return;
-  }
-  Serial.println("SD S");
-
   mq135.calibrate(60);
   Serial.print("Mq calibrate: ");
   Serial.println(mq135.getRo());
   Serial.println("Mq-135 S");
 
-  writeHeader();
+  Serial.print("SD Init");
+  if (!SD.begin(SD_CS)) {
+    Serial.println("SD F");
+    sdState = false;
+    return;
+  } else {
+    Serial.println("SD S");
+    writeHeader();
+  }
 }
 
 uint32_t myTimer1;
@@ -210,12 +213,17 @@ void oneScreen() {
   lcd.setCursor(15, 0);
   lcd.print(time);
 
-  counter++;
-  if (counter >= WRITE_SD) {
-    counter = 0;
-    String timestamps = "";
-    getTimestamps(&timestamps);
-    writeRow(&timestamps, &temperature, &pressure, &humidity, &co2);
+  if(sdState) {
+    counter++;
+    if (counter >= WRITE_SD) {
+      counter = 0;
+      String timestamps = "";
+      getTimestamps(&timestamps);
+      writeRow(&timestamps, &temperature, &pressure, &humidity, &co2);
+    }
+  } else {
+    lcd.setCursor(17,3);
+    lcd.print("SDF");    
   }
 }
 
