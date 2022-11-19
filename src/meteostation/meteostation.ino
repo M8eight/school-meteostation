@@ -9,7 +9,6 @@
 #define SENSOR_PIN 3
 #define WRITE_SD 60 //В секундах
 #define CO2_NORMAL_LIMIT 1550 //В ppm
-#define MQ_SENSETIVITY 35
 
 //mq-135
   #include <MQ135.h>
@@ -285,7 +284,7 @@ void getHumidity(int* humidity) {
 }
 
 void getCo2(int* co2, float temp, int humid) {
-    *co2 = int(gasSensor.getCorrectedRZero(temp, humid));
+    *co2 = int(gasSensor.getCorrectedRZero(temp, humid) * 0.5);
 }
 
 void getPressure(float* pressure) {
