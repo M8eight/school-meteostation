@@ -1,5 +1,5 @@
 # school-meteostation 2.1
-
+# Мой школьный проект
 # Схема метеостанции
 ![1](https://sun9-27.userapi.com/impg/v0J1T3LP2Rc-E3q1Bjb6y1xiEfwxs1Fhq3Td5g/rRwR5QkErLM.jpg?size=1280x787&quality=96&sign=699090439b6d4988d2d22f31fd9a2b62&type=album)
 
